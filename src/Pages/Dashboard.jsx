@@ -4,7 +4,7 @@ import useHouseStore from '../store/houseStore';
 
 const Dashboard = () => {
   const { rumahId } = useParams();
-  const { houses } = useHouseStore();
+  const { houses, connectionStatus } = useHouseStore();
 
   const house = houses.find((house) => house.id === rumahId);
 
@@ -12,12 +12,10 @@ const Dashboard = () => {
     return <Navigate to="/" replace />;
   }
 
-  const houseData = {
-    id: house.id,
-    name: house.name,
-    kompos: { suhu: 38.2, volume: 87, status: house.compostStatus },
-    sampah: { volume: 65, status: house.trashStatus },
-  };
+  const compostData = house.compostData || { suhu: 0, volume: 0 };
+  const trashData = house.trashData || { volume: 0 };
+  const compostStatus = house.compostStatus || 'Normal';
+  const trashStatus = house.trashStatus || 'Normal';
 
   const getStatusBadge = (status) => {
     let color = '';
@@ -28,8 +26,11 @@ const Dashboard = () => {
       case 'Perlu Diperiksa':
         color = 'bg-yellow-100 text-yellow-700';
         break;
-      default:
+      case 'Penuh':
         color = 'bg-red-100 text-red-700';
+        break;
+      default:
+        color = 'bg-gray-100 text-gray-700';
         break;
     }
     return (
@@ -42,7 +43,6 @@ const Dashboard = () => {
   return (
     <div className="p-6 bg-gradient-to-br from-gray-100 to-gray-200 min-h-screen">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
         <div className="flex items-center mb-10">
           <Link
             to="/"
@@ -52,13 +52,30 @@ const Dashboard = () => {
             <FaArrowLeft />
           </Link>
           <h1 className="text-3xl md:text-4xl font-bold text-gray-800">
-            Dashboard: <span className="text-green-600">{houseData.name}</span>
+            Dashboard: <span className="text-green-600">{house.name}</span>
           </h1>
         </div>
-
-        {/* Content */}
+        <div className="mb-6">
+          <p className="text-base font-medium text-gray-700">
+            Status Koneksi MQTT:{' '}
+            <span
+              className={`font-semibold ${
+                connectionStatus === 'connected'
+                  ? 'text-primary'
+                  : connectionStatus === 'connecting'
+                  ? 'text-warning'
+                  : 'text-danger'
+              }`}
+            >
+              {connectionStatus === 'connected'
+                ? 'Terhubung'
+                : connectionStatus === 'connecting'
+                ? 'Menghubungkan'
+                : 'Terputus'}
+            </span>
+          </p>
+        </div>
         <div className="grid md:grid-cols-2 gap-6">
-          {/* Kompos Card */}
           <div className="bg-white border border-gray-200 rounded-2xl shadow-md hover:shadow-lg transition duration-300 p-6">
             <div className="flex items-center gap-3 mb-4">
               <FaTemperatureHigh className="text-orange-500 text-xl" />
@@ -67,20 +84,18 @@ const Dashboard = () => {
             <div className="space-y-3 text-gray-600">
               <div className="flex justify-between">
                 <span>Suhu</span>
-                <span className="font-medium">{houseData.kompos.suhu}°C</span>
+                <span className="font-medium">{compostData.suhu.toFixed(1)}°C</span>
               </div>
               <div className="flex justify-between">
                 <span>Volume</span>
-                <span className="font-medium">{houseData.kompos.volume}%</span>
+                <span className="font-medium">{compostData.volume}%</span>
               </div>
               <div className="flex justify-between items-center">
                 <span>Status</span>
-                {getStatusBadge(houseData.kompos.status)}
+                {getStatusBadge(compostStatus)}
               </div>
             </div>
           </div>
-
-          {/* Sampah Card */}
           <div className="bg-white border border-gray-200 rounded-2xl shadow-md hover:shadow-lg transition duration-300 p-6">
             <div className="flex items-center gap-3 mb-4">
               <FaTrashAlt className="text-red-500 text-xl" />
@@ -89,11 +104,11 @@ const Dashboard = () => {
             <div className="space-y-3 text-gray-600">
               <div className="flex justify-between">
                 <span>Volume</span>
-                <span className="font-medium">{houseData.sampah.volume}%</span>
+                <span className="font-medium">{trashData.volume}%</span>
               </div>
               <div className="flex justify-between items-center">
                 <span>Status</span>
-                {getStatusBadge(houseData.sampah.status)}
+                {getStatusBadge(trashStatus)}
               </div>
             </div>
           </div>

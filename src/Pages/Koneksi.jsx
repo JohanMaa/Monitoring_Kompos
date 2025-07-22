@@ -1,170 +1,118 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import mqtt from 'mqtt';
 import useHouseStore from '../store/houseStore';
 
 const Koneksi = () => {
   const navigate = useNavigate();
-  const { syncWithMqtt } = useHouseStore();
+  const { setBrokerSettings, connectionError } = useHouseStore();
   const [formData, setFormData] = useState({
     broker: 'broker.hivemq.com',
-    port: '8884',
-    topic: 'iot/#',
+    port: '8000',
   });
-  const [client, setClient] = useState(null);
-  const [connectionStatus, setConnectionStatus] = useState('Terputus');
-  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   const validateInput = () => {
-    const { broker, port, topic } = formData;
-    if (!broker.trim()) return 'Broker tidak boleh kosong';
-    const portNum = parseInt(port);
-    if (isNaN(portNum) || portNum < 1 || portNum > 65535) return 'Port harus angka antara 1-65535';
-    if (!topic.trim()) return 'Topic tidak boleh kosong';
+    const { broker, port } = formData;
+    if (!broker.trim()) {
+      return 'Broker tidak boleh kosong';
+    }
+    const portNum = parseInt(port, 10);
+    if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+      return 'Port harus angka antara 1-65535';
+    }
+    if (!/^[a-zA-Z0-9.-]+$/.test(broker)) {
+      return 'Broker hanya boleh berisi huruf, angka, titik, atau tanda hubung';
+    }
     return '';
   };
 
-  const connectMqtt = () => {
+  const handleSave = () => {
     const validationError = validateInput();
     if (validationError) {
-      setError(validationError);
+      useHouseStore.setState({ connectionError: validationError });
+      setSuccessMessage('');
       return;
     }
-
-    const { broker, port } = formData;
-    const brokerUrl = `wss://${broker}:${port}/mqtt`;
-
-    try {
-      const mqttClient = mqtt.connect(brokerUrl, { connectTimeout: 5000 });
-
-      mqttClient.on('connect', () => {
-        setConnectionStatus('Terhubung');
-        setError('');
-        syncWithMqtt(mqttClient, formData.topic);
-      });
-
-      mqttClient.on('error', (err) => {
-        setConnectionStatus('Terputus');
-        setError(`Gagal terhubung: ${err.message}`);
-        mqttClient.end();
-      });
-
-      mqttClient.on('close', () => setConnectionStatus('Terputus'));
-
-      setClient(mqttClient);
-    } catch (err) {
-      setError(`Gagal memulai koneksi: ${err.message}`);
-    }
-  };
-
-  const disconnectMqtt = () => {
-    if (client) {
-      client.end();
-      setClient(null);
-      setConnectionStatus('Terputus');
-      setError('');
-    }
+    const portNum = parseInt(formData.port, 10);
+    console.log('Saving MQTT settings:', { broker: formData.broker, port: portNum });
+    setBrokerSettings(formData.broker, portNum);
+    localStorage.setItem('mqttBroker', formData.broker);
+    localStorage.setItem('mqttPort', formData.port);
+    setSuccessMessage('Pengaturan MQTT berhasil disimpan.');
+    setTimeout(() => setSuccessMessage(''), 3000); // Hilangkan pesan setelah 3 detik
   };
 
   useEffect(() => {
-    return () => {
-      if (client) client.end();
-    };
-  }, [client]);
-
-  const inputClass = (field) =>
-    `border p-3 w-full rounded-lg focus:outline-none focus:ring-2 ${
-      error.includes(field) ? 'border-red-500 focus:ring-red-500' : 'focus:ring-green-500'
-    }`;
+    const savedBroker = localStorage.getItem('mqttBroker') || 'broker.hivemq.com';
+    const savedPort = localStorage.getItem('mqttPort') || '8000';
+    setFormData({ broker: savedBroker, port: savedPort });
+  }, []);
 
   return (
-    <div className="p-6 min-h-screen bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-      <div className="w-full max-w-2xl bg-white shadow-lg rounded-2xl p-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6">Koneksi MQTT</h1>
-        <div className="space-y-5">
-          {/* Broker */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Broker</label>
-            <input
-              type="text"
-              value={formData.broker}
-              onChange={(e) => setFormData({ ...formData, broker: e.target.value })}
-              className={inputClass('Broker')}
-              placeholder="Contoh: broker.hivemq.com"
-            />
+    <div className="p-6 bg-gray-100 min-h-screen flex flex-col md:flex-row md:gap-8 md:justify-center">
+      <div className="max-w-6xl w-full">
+        <h1 className="text-4xl font-bold text-primary mb-8">Koneksi MQTT</h1>
+        <div className="bg-white p-6 rounded-xl shadow-lg">
+          <h2 className="text-xl font-semibold text-gray-800 mb-4">Atur Koneksi MQTT</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-base font-medium text-gray-700 mb-1">
+                Broker
+              </label>
+              <input
+                type="text"
+                value={formData.broker}
+                onChange={(e) => setFormData({ ...formData, broker: e.target.value })}
+                placeholder="Masukkan broker (contoh: broker.hivemq.com)"
+                className={`border p-3 w-full rounded-lg focus:outline-none focus:ring-2 ${
+                  connectionError.includes('Broker') ? 'border-danger focus:ring-danger' : 'focus:ring-primary'
+                }`}
+              />
+            </div>
+            <div>
+              <label className="block text-base font-medium text-gray-700 mb-1">
+                Port
+              </label>
+              <input
+                type="number"
+                value={formData.port}
+                onChange={(e) => setFormData({ ...formData, port: e.target.value })}
+                placeholder="Masukkan port (contoh: 8000)"
+                className={`border p-3 w-full rounded-lg focus:outline-none focus:ring-2 ${
+                  connectionError.includes('Port') ? 'border-danger focus:ring-danger' : 'focus:ring-primary'
+                }`}
+                min="1"
+                max="65535"
+              />
+            </div>
+            <div>
+              <label className="block text-base font-medium text-gray-700 mb-1">
+                Topic
+              </label>
+              <input
+                type="text"
+                value="iot/monitoring"
+                disabled
+                className="border p-3 w-full rounded-lg bg-gray-100 cursor-not-allowed"
+              />
+            </div>
+            {successMessage && <p className="text-sm text-primary">{successMessage}</p>}
+            {connectionError && <p className="text-sm text-danger">{connectionError}</p>}
+            <div className="flex space-x-3">
+              <button
+                onClick={handleSave}
+                className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-green-600 transition-all duration-300"
+              >
+                Simpan
+              </button>
+              <button
+                onClick={() => navigate('/')}
+                className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-all duration-300"
+              >
+                Kembali ke Beranda
+              </button>
+            </div>
           </div>
-          {/* Port */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Port</label>
-            <input
-              type="number"
-              value={formData.port}
-              onChange={(e) => setFormData({ ...formData, port: e.target.value })}
-              className={inputClass('Port')}
-              placeholder="Contoh: 8884"
-              min="1"
-              max="65535"
-            />
-          </div>
-          {/* Topic */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Topic</label>
-            <input
-              type="text"
-              value={formData.topic}
-              onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
-              className={inputClass('Topic')}
-              placeholder="Contoh: iot/#"
-            />
-          </div>
-
-          {/* Status */}
-          <div className="flex items-center justify-between text-sm font-medium">
-            <span className="text-gray-700">Status Koneksi</span>
-            <span
-              className={`${
-                connectionStatus === 'Terhubung' ? 'text-green-600' : 'text-red-600'
-              } font-semibold`}
-            >
-              {connectionStatus}
-            </span>
-          </div>
-
-          {/* Error message */}
-          {error && <p className="text-sm text-red-500">{error}</p>}
-
-          {/* Actions */}
-          <div className="flex flex-col md:flex-row gap-3 mt-4">
-            <button
-              onClick={connectMqtt}
-              disabled={connectionStatus === 'Terhubung'}
-              className={`w-full px-6 py-3 rounded-lg text-white font-medium transition-all duration-300 ${
-                connectionStatus === 'Terhubung'
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-green-600 hover:bg-green-700'
-              }`}
-            >
-              Hubungkan
-            </button>
-            <button
-              onClick={disconnectMqtt}
-              disabled={connectionStatus === 'Terputus'}
-              className={`w-full px-6 py-3 rounded-lg text-white font-medium transition-all duration-300 ${
-                connectionStatus === 'Terputus'
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-red-500 hover:bg-red-600'
-              }`}
-            >
-              Putuskan
-            </button>
-          </div>
-
-          <button
-            onClick={() => navigate('/')}
-            className="w-full px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-all duration-300 mt-3"
-          >
-            Kembali ke Beranda
-          </button>
         </div>
       </div>
     </div>
